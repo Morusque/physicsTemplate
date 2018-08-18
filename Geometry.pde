@@ -47,7 +47,7 @@ PVector lineSegmentIntersection (PVector p1A, PVector p1B, PVector p2A, PVector 
 PVector getClosestPointOnSegment(PVector s1, PVector s2, PVector p) {
   double xDelta = s2.x - s1.x;
   double yDelta = s2.y - s1.y;
-  if ((xDelta == 0) && (yDelta == 0)) return null; // Segment start equals segment end
+  if ((xDelta == 0) && (yDelta == 0)) return s1; // Segment start equals segment end
   double u = ((p.x - s1.x) * xDelta + (p.y - s1.y) * yDelta) / (xDelta * xDelta + yDelta * yDelta);
   if (u < 0) return new PVector(s1.x, s1.y);
   else if (u > 1) return new PVector(s2.x, s2.y);

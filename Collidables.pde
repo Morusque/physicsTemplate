@@ -3,6 +3,7 @@ interface Collidable {
   void update();
   void draw();
   Bounce getBounceForCircle(PVector pos, PVector dir, float radius);
+  Bounce getBounceForLine(PVector pos, PVector dir);
 }
 
 class Bounce {
@@ -45,6 +46,45 @@ class Line implements Collidable {
   void draw() {
     line(p1.x, p1.y, p2.x, p2.y);
   }
+  Bounce getBounceForLine(PVector o_pos, PVector o_dir) {
+    // check if a point (o_) will collide on this line during the trajectory
+    Bounce bounce = new Bounce();
+
+    // if the bounding boxes don't collide, stop there
+    BoundingBox thisBox = new BoundingBox(new PVector(min(p1.x, p2.x), min(p1.y, p2.y)), new PVector(max(p1.x, p2.x), max(p1.y, p2.y)));
+    PVector o_finalPos = PVector.add(o_pos, o_dir);
+    BoundingBox otherBox = new BoundingBox(new PVector(min(o_pos.x, o_finalPos.x), min(o_pos.y, o_finalPos.y)), new PVector(max(o_pos.x, o_finalPos.x), max(o_pos.y, o_finalPos.y)));
+    if (!thisBox.intersectsWith(otherBox)) return bounce;
+
+    // don't bounce if segment is a point or distance to closest point on line is already too far
+    PVector closestPoint = getClosestPointOnSegment(p1, p2, o_pos);
+    if (p1.x==p2.x&&p1.y==p2.y) return bounce;
+    else if (PVector.dist(closestPoint, o_pos)>o_dir.mag()) return bounce;
+    
+    // if it's already colliding, ignore it
+    PVector thisClosestIntersection = closestIntersection(o_pos, 0, p1, p2);
+    if (thisClosestIntersection!=null) return bounce;
+      
+    // add all possible intersections
+    PVector nextPos = PVector.add(o_pos, o_dir);
+    PVector intersection = lineSegmentIntersection(o_pos,nextPos,p1,p2);
+    
+    // make the bounce object
+    if (intersection!=null) {
+      PVector closestPointOnSegment = getClosestPointOnSegment(p1, p2, intersection);
+      float normalFromSegment = atan2(intersection.y-closestPointOnSegment.y, intersection.x-closestPointOnSegment.x);
+      float remainingDist = o_dir.mag()-PVector.dist(o_pos, intersection);
+      float incidentAngle = atan2(intersection.y-o_pos.y, intersection.x-o_pos.x);
+      float finalAngle = (incidentAngle+PI)+(normalFromSegment-incidentAngle)*2;
+      bounce.collisionPoint = intersection;
+      bounce.distance = PVector.dist(o_pos, intersection);
+      bounce.nextDir = new PVector(cos(finalAngle)*remainingDist, sin(finalAngle)*remainingDist);
+      bounce.bounced = true;
+      bounce.concernedCollidable = this;
+    }
+
+    return bounce;
+  }
   Bounce getBounceForCircle(PVector o_pos, PVector o_dir, float o_radius) {
     // check if a ball (o_) will collide on this line during the trajectory
 
@@ -56,28 +96,38 @@ class Line implements Collidable {
     BoundingBox otherBox = new BoundingBox(new PVector(min(o_pos.x, o_finalPos.x)-o_radius, min(o_pos.y, o_finalPos.y)-o_radius), new PVector(max(o_pos.x, o_finalPos.x)+o_radius, max(o_pos.y, o_finalPos.y)+o_radius));
     if (!thisBox.intersectsWith(otherBox)) return bounce;
 
-    // this part is messy and need comments
+    // don't bounce if segment is a point or distance to closest point on line is already too far
     PVector closestPoint = getClosestPointOnSegment(p1, p2, o_pos);
-    if (closestPoint==null) return bounce;
+    if (p1.x==p2.x&&p1.y==p2.y) return bounce;
     else if (PVector.dist(closestPoint, o_pos)>o_dir.mag()+o_radius) return bounce;
+    
+    // if it's already colliding, ignore it
     PVector thisClosestIntersection = closestIntersection(o_pos, o_radius, p1, p2);
-    if (thisClosestIntersection!=null) return bounce;// if it's already colliding, ignore it
+    if (thisClosestIntersection!=null) return bounce;
+    
+    // find possible intersections
     PVector nextPos = PVector.add(o_pos, o_dir);
-    ArrayList<PVector> intersections = new ArrayList<PVector>();
     PVector end1 = closestIntersection(p1, o_radius, o_pos, nextPos);
     PVector end2 = closestIntersection(p2, o_radius, o_pos, nextPos);
     float normalAngle = atan2(p1.y-p2.y, p1.x-p2.x)+HALF_PI;
     PVector segment1 = lineSegmentIntersection(new PVector(p1.x+cos(normalAngle)*o_radius, p1.y+sin(normalAngle)*o_radius), new PVector(p2.x+cos(normalAngle)*o_radius, p2.y+sin(normalAngle)*o_radius), o_pos, nextPos);
     PVector segment2 = lineSegmentIntersection(new PVector(p1.x+cos(normalAngle+PI)*o_radius, p1.y+sin(normalAngle+PI)*o_radius), new PVector(p2.x+cos(normalAngle+PI)*o_radius, p2.y+sin(normalAngle+PI)*o_radius), o_pos, nextPos);
+    
+    // add all possible intersections
+    ArrayList<PVector> intersections = new ArrayList<PVector>();
     if (end1!=null) if (sq(o_dir.mag())>=sqDist(o_pos, end1)) intersections.add(end1);
     if (end2!=null) if (sq(o_dir.mag())>=sqDist(o_pos, end2)) intersections.add(end2);
     if (segment1!=null) intersections.add(segment1);
     if (segment2!=null) intersections.add(segment2);
+    
+    // find the first intersection
     PVector bestClosestIntersection = null;
     for (PVector inter : intersections) {
       if (bestClosestIntersection==null) bestClosestIntersection = inter;
       else if (sqDist(o_pos, bestClosestIntersection)>sqDist(o_pos, inter)) bestClosestIntersection = inter;
     }
+    
+    // make the bounce object
     if (bestClosestIntersection!=null) {
       PVector closestPointOnSegment = getClosestPointOnSegment(p1, p2, bestClosestIntersection);
       float normalFromSegment = atan2(bestClosestIntersection.y-closestPointOnSegment.y, bestClosestIntersection.x-closestPointOnSegment.x);
@@ -167,6 +217,12 @@ class Circle implements Collidable {
   }
   void draw() {
     ellipse(pos.x, pos.y, radius*2, radius*2);
+  }
+  
+  Bounce getBounceForLine(PVector o_pos, PVector o_dir) {
+    // TODO
+    
+    return null;
   }
 
   Bounce getBounceForCircle(PVector o_pos, PVector o_dir, float o_radius) {
