@@ -58,3 +58,11 @@ PVector getClosestPointOnSegment(PVector s1, PVector s2, PVector p) {
 float sqDist(PVector p1, PVector p2) {
   return sq(p1.x-p2.x)+sq(p1.y-p2.y);
 }
+
+// smallest point to ligne distance
+float getSmallestDistanceToLine(PVector p, PVector a, PVector b) {
+  PVector pa = PVector.sub(p,a);
+  PVector ba = PVector.sub(b,a);
+  float h = constrain(PVector.dot(pa,ba) / PVector.dot(ba,ba), 0., 1.);  
+  return PVector.sub(pa,PVector.mult(ba,h)).mag();
+}
